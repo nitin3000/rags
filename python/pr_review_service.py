@@ -60,15 +60,15 @@ def health_check():
 
 def process_pr_review_workflow(repo: str, pr_number: int, github_token: str):
     """Orchestrates vector fetching, AI assessment, and GitHub publishing."""
-    # 🔥 FIXED: Changed from github.com to ://github.com
-    gh_base_url = "https://://github.com" 
+    
+    # 🔥 FORCE THE CORRECT HARDCODED HTTP PATH FORMAT
+    files_url = f"https://github.com{repo}/pulls/{pr_number}/files"
+    
     headers = {
         "Authorization": f"Bearer {github_token}",
         "Accept": "application/vnd.github.v3+json"
     }
     
-    # Fetch pull request changed files & diff patches
-    files_url = f"{gh_base_url}/repos/{repo}/pulls/{pr_number}/files"
     print(f"[⚙️] Outbound API Request -> {files_url}")
     response = requests.get(files_url, headers=headers)
     
@@ -142,13 +142,16 @@ def process_pr_review_workflow(repo: str, pr_number: int, github_token: str):
             })
             
     if comments:
-        review_url = f"{gh_base_url}/repos/{repo}/pulls/{pr_number}/reviews"
+        # 🔥 FORCE THE CORRECT REVIEW POST PATH FORMAT AS WELL
+        review_url = f"https://github.com{repo}/pulls/{pr_number}/reviews"
+        
         review_payload = {
             "body": "🤖 **Oracle RAG-Engine Codebase Analysis Complete.** Below are architectural enhancements recommended based on your historical code repository models:",
             "event": "COMMENT",
             "comments": comments
         }
         review_res = requests.post(review_url, json=review_payload, headers=headers)
+
         print(f"[🎉] Published review payload to PR #{pr_number}. Response Status: {review_res.status_code}")
     else:
         print(f"[✔] PR #{pr_number} cleared cleanly with zero recommendations.")
