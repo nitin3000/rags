@@ -17,11 +17,20 @@ ORACLE_USER = os.getenv("ORACLE_USER", "system")
 ORACLE_PASSWORD = os.getenv("ORACLE_PASSWORD", "your_password_here")
 ORACLE_DSN = os.getenv("ORACLE_DSN", "localhost:1521/FREEPDB1") # Standard 23ai Free local DSN
 
-# 2. Pydantic Models for Inbound JSON validation
-class WebhookPayload(BaseModel):
-    repo: str
-    pr_number: int
-    token: str
+from typing import Optional
+
+# 1. Update the Pydantic models to mirror GitHub's native nesting
+class RepositoryInfo(BaseModel):
+    full_name: str # Maps to 'owner/repo_name'
+
+class PullRequestInfo(BaseModel):
+    number: int
+
+class GitHubWebhookPayload(BaseModel):
+    action: str # e.g., 'opened', 'synchronize'
+    pull_request: Optional[PullRequestInfo] = None
+    repository: RepositoryInfo
+
 
 # 🟩 HEALTH CHECK ROUTE
 @app.get("/health")
@@ -146,20 +155,35 @@ def process_pr_review_workflow(repo: str, pr_number: int, github_token: str):
     connection.close()
 
 
-# 🚀 WEBHOOK REVIEW INGESTION ROUTE
+# 2. Update the route endpoint to parse the new payload
 @app.post("/review")
-def trigger_pr_review(payload: WebhookPayload, background_tasks: BackgroundTasks):
-    """Receives inbound GitHub triggers via ngrok and handles computation offline."""
-    print(f"[+] Received incoming review request for Repo: {payload.repo} | PR: {payload.pr_number}")
+def trigger_pr_review(payload: GitHubWebhookPayload, background_tasks: BackgroundTasks):
+    """Receives native inbound GitHub webhook payloads seamlessly."""
     
-    # Hand execution over to a background worker threads so the HTTP connection can return 200 OK immediately
+    # Ignore PR actions that aren't opening or syncing code
+    if payload.action not in ["opened", "synchronize"]:
+        return {"message": f"Action '{payload.action}' ignored. No review required."}
+        
+    if not payload.pull_request:
+        raise HTTPException(status_code=400, detail="Missing pull_request object context.")
+
+    repo_full_name = payload.repository.full_name
+    pr_num = payload.pull_request.number
+    
+    # ⚠️ CRITICAL CHANGE: Real webhooks don't send a personal token for security.
+    # Retrieve your GitHub token securely from your environment variables instead.
+    github_token = os.getenv("GITHUB_TOKEN", "your_fallback_token_here")
+
+    print(f"[+] Received incoming GitHub Webhook for Repo: {repo_full_name} | PR: {pr_num}")
+    
+    # Queue the work to run asynchronously
     background_tasks.add_task(
         process_pr_review_workflow, 
-        payload.repo, 
-        payload.pr_number, 
-        payload.token
+        repo_full_name, 
+        pr_num, 
+        github_token
     )
-    return {"message": "Review task queued and processing locally."}
+    return {"message": f"GitHub Webhook processed successfully. PR #{pr_num} review queued."}
     
 if __name__ == "__main__":
     import uvicorn
