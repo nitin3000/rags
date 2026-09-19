@@ -71,7 +71,7 @@ def process_pr_review_workflow(repo: str, pr_number: int, github_token: str):
     connection = oracledb.connect(user=ORACLE_USER, password=ORACLE_PASSWORD, dsn=ORACLE_DSN,
     mode=oracledb.AUTH_MODE_SYSDBA )
     
-    for file in pr_files:
+    for file in pr_files[0]:
         filename = file['filename']
         patch_diff = file.get('patch') # Extract the code lines changed
         
