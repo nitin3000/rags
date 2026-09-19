@@ -79,7 +79,7 @@ def process_pr_review_workflow(repo: str, pr_number: int, github_token: str):
     pr_files = response.json()
     comments = []
     
-    # Establish connection to local Oracle 23ai database
+    # Modified Establish connection to local Oracle 23ai database
     connection = oracledb.connect(
         user=ORACLE_USER, password=ORACLE_PASSWORD, dsn=ORACLE_DSN,
         mode=oracledb.AUTH_MODE_SYSDBA 
