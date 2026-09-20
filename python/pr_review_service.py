@@ -106,15 +106,20 @@ def process_pr_review_workflow(repo: str, pr_number: int, github_token: str):
 
         diff_vector = embedding_res.data[0].embedding
         
-        # Vector-search your local Oracle DB Database
+        # 1. Keep the standard query format (Optionally remove TO_VECTOR since it's redundant now)
+        sql = """
+            SELECT file_path, code_content 
+            FROM code_knowledge_base 
+            ORDER BY VECTOR_DISTANCE(code_embedding, :1, COSINE) 
+            FETCH FIRST 2 ROWS ONLY
+        """
+        
+        # 2. 🔥 THE CRITICAL FIX: Wrap the raw array list before passing to execute
+        wrapped_search_vector = oracledb.Vector(diff_vector)
+        
+        # 3. Pass the driver-validated object into the query binding execution loop
         with connection.cursor() as cursor:
-            sql = """
-                SELECT file_path, code_content 
-                FROM code_knowledge_base 
-                ORDER BY VECTOR_DISTANCE(code_embedding, :1, COSINE) 
-                FETCH FIRST 2 ROWS ONLY
-            """
-            cursor.execute(sql, [diff_vector])
+            cursor.execute(sql, [wrapped_search_vector])
             historical_matches = cursor.fetchall()
             
         db_context = "\n".join([f"File: {row[0]}\nCode Snippet:\n{row[1]}" for row in historical_matches])
