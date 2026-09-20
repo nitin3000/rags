@@ -63,7 +63,7 @@ def process_pr_review_workflow(repo: str, pr_number: int, github_token: str):
     print(repo)
     
     # 🔥 FORCE THE CORRECT HARDCODED HTTP PATH FORMAT
-    files_url = f"https://github.com{repo}/pulls/{pr_number}/files"
+    files_url = f"https://github.com/{repo}/pulls/{pr_number}/files"
     
     headers = {
         "Authorization": f"Bearer {github_token}",
@@ -144,7 +144,7 @@ def process_pr_review_workflow(repo: str, pr_number: int, github_token: str):
             
     if comments:
         # 🔥 TEst FORCE THE CORRECT REVIEW POST PATH FORMAT AS WELL
-        review_url = f"https://github.com{repo}/pulls/{pr_number}/reviews"
+        review_url = f"https://github.com/{repo}/pulls/{pr_number}/reviews"
         
         review_payload = {
             "body": "🤖 **Oracle RAG-Engine Codebase Analysis Complete.** Below are architectural enhancements recommended based on your historical code repository models:",
