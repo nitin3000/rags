@@ -101,6 +101,9 @@ def process_pr_review_workflow(repo: str, pr_number: int, github_token: str):
         embedding_res = ai_client.embeddings.create(
             input=[patch_diff], model="text-embedding-3-large"
         )
+        print("EMBEDDING TYPE:", type(embedding_res.data))
+        print("EMBEDDING CONTENT SAMPLE:", embedding_res.data[:2] if isinstance(embedding_res.data, list) else embedding_res.data)
+
         diff_vector = embedding_res.data.embedding
         
         # Vector-search your local Oracle DB
