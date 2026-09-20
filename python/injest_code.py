@@ -42,17 +42,27 @@ class OracleCodeIngestionPipeline:
                     raise e
 
             # Create the exact native layout expected by langchain_oracledb
-            print(f"[⚙️] Injecting standard layout for SYS.{target_table}...")
+            print(f"[⚙️] Injecting universal multi-identifier layout for SYS.{target_table}...")
             ddl_create = f"""
             CREATE TABLE SYS.{target_table} (
                 id               VARCHAR2(64) DEFAULT LOWER(RAWTOHEX(SYS_GUID())) NOT NULL,
-                text             CLOB NOT NULL,                           -- LangChain's source code chunk content
-                metadata         VARCHAR2(4000) CHECK (metadata IS JSON), -- LangChain's file tracking metadata
-                embedding        VECTOR(1536, FLOAT32),                   -- OpenAI 3-small vector location arrays
+                file_path        VARCHAR2(512) NOT NULL,
+                programming_lang VARCHAR2(64) NOT NULL,
+                
+                -- Custom Ingestion Script fields
+                code_chunk       CLOB NOT NULL,
+                code_embedding   VECTOR(1536, FLOAT32),
+                
+                -- LangChain OracleVS internal hardcoded fields
+                text             CLOB,
+                metadata         VARCHAR2(4000) CHECK (metadata IS JSON),
+                embedding        VECTOR(1536, FLOAT32),
+                
                 created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 CONSTRAINT pk_code_knowledge_base PRIMARY KEY (id)
             )
             """
+
             cursor.execute(ddl_create)
             self.connection.commit()
             print(f"[✓] SYS.{target_table} instantiated successfully.")
