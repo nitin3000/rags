@@ -101,8 +101,8 @@ def process_pr_review_workflow(repo: str, pr_number: int, github_token: str):
         embedding_res = ai_client.embeddings.create(
             input=[patch_diff], model="text-embedding-3-large"
         )
-        print("EMBEDDING TYPE:", type(embedding_res.data))
-        print("EMBEDDING CONTENT SAMPLE:", embedding_res.data[:2] if isinstance(embedding_res.data, list) else embedding_res.data)
+     #   print("EMBEDDING TYPE:", type(embedding_res.data))
+     #   print("EMBEDDING CONTENT SAMPLE:", embedding_res.data[:2] if isinstance(embedding_res.data, list) else embedding_res.data)
 
         diff_vector = embedding_res.data[0].embedding
         
@@ -168,20 +168,34 @@ def process_pr_review_workflow(repo: str, pr_number: int, github_token: str):
                 "body": review_feedback
             })
             
+      
     if comments:
-        # 🔥 TEst FORCE THE CORRECT REVIEW POST PATH FORMAT AS WELL
-        review_url = f"https://github.com/{repo}/pulls/{pr_number}/reviews"
+        # 🔥 THE EXACT PATH FIX: Ensure the API maps to /repos/{owner}/{repo}/pulls/{number}/reviews
+        #review_url = f"https://github.com{repo}/pulls/{pr_number}/reviews"
+        review_url = f"https://api.github.com/repos/{repo}/pulls/{pr_number}/reviews"
         
         review_payload = {
             "body": "🤖 **Oracle RAG-Engine Codebase Analysis Complete.** Below are architectural enhancements recommended based on your historical code repository models:",
-            "event": "COMMENT",
+            "event": "COMMENT",  # Can be "COMMENT", "APPROVE", or "REQUEST_CHANGES"
             "comments": comments
         }
+        
+        # Ensure your custom request headers explicitly state the API version required by GitHub
+        headers = {
+            "Authorization": f"Bearer {github_token}",
+            "Accept": "application/vnd.github+json",  # Standard JSON payload format specifier
+            "X-GitHub-Api-Version": "2022-11-28"       # Enforces modern endpoint routing rules
+        }
+        
+        print(f"[⚙️] Submitting review payload matrix to PR #{pr_number}...")
         review_res = requests.post(review_url, json=review_payload, headers=headers)
+        
+        # If still returning 422, inspect GitHub's explicit error text to catch specific validation drops
+        if review_res.status_code != 200 and review_res.status_code != 201:
+            print(f"[❌] GitHub rejected payload verification (Status {review_res.status_code}): {review_res.text}")
+        else:
+            print(f"[🎉] Published review payload to PR #{pr_number}. Response Status: {review_res.status_code}")
 
-        print(f"[🎉] Published review payload to PR #{pr_number}. Response Status: {review_res.status_code}")
-    else:
-        print(f"[✔] PR #{pr_number} cleared cleanly with zero recommendations.")
         
     connection.close()
 
