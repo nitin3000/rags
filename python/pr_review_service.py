@@ -209,7 +209,7 @@ if __name__ == "__main__":
     import ngrok
     import sys
 
-    # 1. Retrieve the AuthToken from the system environment
+    # 1. Retrieve the AuthToken from the system environment....
     auth_token = os.getenv("NGROK_AUTHTOKEN")
     
     if not auth_token:
