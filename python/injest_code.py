@@ -43,14 +43,17 @@ class OracleCodeIngestionPipeline:
 
             # Create the exact native layout expected by langchain_oracledb
             print(f"[⚙️] Injecting universal multi-identifier layout for SYS.{target_table}...")
+            # Create the exact layout satisfying your custom script variables and langchain_oracledb
+            print(f"[⚙️] Injecting complete universal identifier layout for SYS.{target_table}...")
             ddl_create = f"""
             CREATE TABLE SYS.{target_table} (
                 id               VARCHAR2(64) DEFAULT LOWER(RAWTOHEX(SYS_GUID())) NOT NULL,
                 file_path        VARCHAR2(512) NOT NULL,
                 programming_lang VARCHAR2(64) NOT NULL,
                 
-                -- Custom Ingestion Script fields
-                code_chunk       CLOB NOT NULL,
+                -- Custom Ingestion Script Content Fields (Covers both content variants)
+                code_chunk       CLOB,
+                code_content     CLOB,                                  -- Added to satisfy ORA-00904
                 code_embedding   VECTOR(1536, FLOAT32),
                 
                 -- LangChain OracleVS internal hardcoded fields
@@ -62,6 +65,7 @@ class OracleCodeIngestionPipeline:
                 CONSTRAINT pk_code_knowledge_base PRIMARY KEY (id)
             )
             """
+
 
             cursor.execute(ddl_create)
             self.connection.commit()
