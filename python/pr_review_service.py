@@ -121,6 +121,24 @@ def process_pr_review_workflow(repo: str, pr_number: int, github_token: str):
             # Pass your raw python embedding list directly (do not wrap it)
             cursor.execute(sql, [diff_vector])
             historical_matches = cursor.fetchall()
+                        
+        db_context = "\n".join([f"File: {row[0]}\nCode Snippet:\n{row[1]}" for row in historical_matches])
+        
+        
+        sql = """
+            SELECT file_path, code_content 
+            FROM code_knowledge_base 
+            ORDER BY VECTOR_DISTANCE(code_embedding, :1, COSINE) 
+            FETCH FIRST 2 ROWS ONLY
+        """
+        
+        with connection.cursor() as cursor:
+            # 🔥 THE EXACT FIX: Tell the driver to treat the incoming list parameter as a vector
+            cursor.setinputsizes(oracledb.DB_TYPE_VECTOR)
+            
+            # Pass your raw python embedding list directly (do not wrap it)
+            cursor.execute(sql, [diff_vector])
+            historical_matches = cursor.fetchall()
             
         prompt = f"""
         You are an elite Principal Technical Architect conducting a rigorous automated code review.
