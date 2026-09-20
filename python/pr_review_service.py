@@ -171,7 +171,6 @@ def process_pr_review_workflow(repo: str, pr_number: int, github_token: str):
       
     if comments:
         # 🔥 THE EXACT PATH FIX: Ensure the API maps to /repos/{owner}/{repo}/pulls/{number}/reviews
-        #review_url = f"https://github.com{repo}/pulls/{pr_number}/reviews"
         review_url = f"https://api.github.com/repos/{repo}/pulls/{pr_number}/reviews"
         
         review_payload = {
