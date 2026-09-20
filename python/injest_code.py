@@ -6,16 +6,19 @@ from langchain_core.documents import Document
 from langchain_oracledb.vectorstores import OracleVS
 from langchain_openai import OpenAIEmbeddings
 
+
 # Import the modern package processing elements
 import tree_sitter_language_pack as tspack
 
 class OracleCodeIngestionPipeline:
     def __init__(self, openai_api_key: str):
+        # 1. Initialize modern OpenAI embedding configurations
         self.embeddings = OpenAIEmbeddings(
             model="text-embedding-3-small", 
             openai_api_key=openai_api_key
         )
         
+        # 2. Establish local administrative socket access profiles
         self.connection = oracledb.connect(
             user="sys",
             password="YourSecurePassword",
@@ -23,21 +26,54 @@ class OracleCodeIngestionPipeline:
             mode=oracledb.AUTH_MODE_SYSDBA
         )
         
+        # Aligned to match your pipeline's target backend database schema
+        target_table = "CODE_KNOWLEDGE_BASE"
+        
+        # ─── INTERCEPT AND PRE-CREATE THE SYS VECTOR TABLE ───────────────────────
+        print(f"[⚙️] Auditing schema footprint for table: SYS.{target_table}")
+        with self.connection.cursor() as cursor:
+            try:
+                # Check if it exists within the operational SYS schema footprint
+                cursor.execute(f"SELECT 1 FROM SYS.{target_table} WHERE ROWNUM = 1")
+            except oracledb.DatabaseError as e:
+                error_obj, = e.args
+                if error_obj.code == 942:  # ORA-00942: Table or view does not exist
+                    print(f"[⚙️] Table SYS.{target_table} missing. Injecting database layout...")
+                    
+                    # Setup native vector parsing bounds (1536 dimensions for text-embedding-3-small)
+                    ddl_create = f"""
+                    CREATE TABLE SYS.{target_table} (
+                        id          VARCHAR2(64) DEFAULT LOWER(RAWTOHEX(SYS_GUID())) NOT NULL,
+                        text        CLOB NOT NULL,
+                        metadata    VARCHAR2(4000) CHECK (metadata IS JSON),
+                        embedding   VECTOR(1536, FLOAT32),
+                        CONSTRAINT pk_code_knowledge_base PRIMARY KEY (id)
+                    )
+                    """
+                    cursor.execute(ddl_create)
+                    self.connection.commit()
+                    print(f"[✓] SYS.{target_table} instantiated successfully.")
+                else:
+                    raise e
+                    
+        # 3. Securely map official LangChain-OracleDB components
+        # Note: distance_strategy accepts the direct string literal "COSINE" here
         self.vector_store = OracleVS(
             client=self.connection,
             embedding_function=self.embeddings,
-            table_name="REPOSITORY_CONTEXT",
-            distance_strategy="COSINE"
+            table_name=target_table,
+            distance_strategy="COSINE" 
         )
         
+        # 4. Enforce clean language parsing maps
         self.extension_map = {
             ".py": "python",
             ".java": "java",
             ".go": "go",
-            ".jsx": "tsx",   # Normalized to standard tree-sitter grammar names
+            ".jsx": "tsx",
             ".tsx": "tsx"
         }
-
+        
     def compute_file_hash(self, file_content: str) -> str:
         return hashlib.md5(file_content.encode('utf-8')).hexdigest()
 

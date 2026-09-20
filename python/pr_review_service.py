@@ -106,7 +106,7 @@ def process_pr_review_workflow(repo: str, pr_number: int, github_token: str):
 
         diff_vector = embedding_res.data[0].embedding
         
-        # Vector-search your local Oracle DB
+        # Vector-search your local Oracle DB Database
         with connection.cursor() as cursor:
             sql = """
                 SELECT file_path, code_content 
