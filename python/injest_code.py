@@ -3,9 +3,8 @@ import hashlib
 import oracledb
 from typing import List, Dict, Any
 from langchain_core.documents import Document
-from langchain_oracledb.vectorstores import OracleVS
 from langchain_openai import OpenAIEmbeddings
-
+from langchain_oracledb import OracleVS
 
 # Import the modern package processing elements
 import tree_sitter_language_pack as tspack
@@ -26,43 +25,45 @@ class OracleCodeIngestionPipeline:
             mode=oracledb.AUTH_MODE_SYSDBA
         )
         
-        # Aligned to match your pipeline's target backend database schema
+        # Must align to the table LangChain targets internally
         target_table = "CODE_KNOWLEDGE_BASE"
         
-        # ─── INTERCEPT AND PRE-CREATE THE SYS VECTOR TABLE ───────────────────────
+        # ─── SAFE RESET & PRE-CREATE LOOP ────────────────────────────────────
         print(f"[⚙️] Auditing schema footprint for table: SYS.{target_table}")
         with self.connection.cursor() as cursor:
+            # First, safely drop old versions of the table to clean out old column structures
             try:
-                # Check if it exists within the operational SYS schema footprint
-                cursor.execute(f"SELECT 1 FROM SYS.{target_table} WHERE ROWNUM = 1")
+                print(f"[⚙️] Dropping legacy structural layout for SYS.{target_table}...")
+                cursor.execute(f"DROP TABLE SYS.{target_table}")
+                self.connection.commit()
             except oracledb.DatabaseError as e:
                 error_obj, = e.args
-                if error_obj.code == 942:  # ORA-00942: Table or view does not exist
-                    print(f"[⚙️] Table SYS.{target_table} missing. Injecting database layout...")
-                    
-                    # Setup native vector parsing bounds (1536 dimensions for text-embedding-3-small)
-                    ddl_create = f"""
-                    CREATE TABLE SYS.{target_table} (
-                        id          VARCHAR2(64) DEFAULT LOWER(RAWTOHEX(SYS_GUID())) NOT NULL,
-                        text        CLOB NOT NULL,
-                        metadata    VARCHAR2(4000) CHECK (metadata IS JSON),
-                        embedding   VECTOR(1536, FLOAT32),
-                        CONSTRAINT pk_code_knowledge_base PRIMARY KEY (id)
-                    )
-                    """
-                    cursor.execute(ddl_create)
-                    self.connection.commit()
-                    print(f"[✓] SYS.{target_table} instantiated successfully.")
-                else:
+                if error_obj.code != 942:  # Ignore 'table does not exist' errors
                     raise e
+
+            # Create the exact native layout expected by langchain_oracledb
+            print(f"[⚙️] Injecting standard layout for SYS.{target_table}...")
+            ddl_create = f"""
+            CREATE TABLE SYS.{target_table} (
+                id               VARCHAR2(64) DEFAULT LOWER(RAWTOHEX(SYS_GUID())) NOT NULL,
+                text             CLOB NOT NULL,                           -- LangChain's source code chunk content
+                metadata         VARCHAR2(4000) CHECK (metadata IS JSON), -- LangChain's file tracking metadata
+                embedding        VECTOR(1536, FLOAT32),                   -- OpenAI 3-small vector location arrays
+                created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                CONSTRAINT pk_code_knowledge_base PRIMARY KEY (id)
+            )
+            """
+            cursor.execute(ddl_create)
+            self.connection.commit()
+            print(f"[✓] SYS.{target_table} instantiated successfully.")
                     
         # 3. Securely map official LangChain-OracleDB components
-        # Note: distance_strategy accepts the direct string literal "COSINE" here
+        # Fixed: Removed custom column parameters. Passing standard client, table, and enum strategies.
         self.vector_store = OracleVS(
             client=self.connection,
             embedding_function=self.embeddings,
             table_name=target_table,
-            distance_strategy="COSINE" 
+            distance_strategy="COSINE"
         )
         
         # 4. Enforce clean language parsing maps
@@ -73,6 +74,7 @@ class OracleCodeIngestionPipeline:
             ".jsx": "tsx",
             ".tsx": "tsx"
         }
+
         
     def compute_file_hash(self, file_content: str) -> str:
         return hashlib.md5(file_content.encode('utf-8')).hexdigest()
