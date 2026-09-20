@@ -61,9 +61,10 @@ def health_check():
 def process_pr_review_workflow(repo: str, pr_number: int, github_token: str):
     """Orchestrates vector fetching, AI assessment, and GitHub publishing."""
     print(repo)
+    print(pr_number)
     
     # 🔥 FORCE THE CORRECT HARDCODED HTTP PATH FORMAT
-    files_url = f"https://github.com/{repo}/pulls/{pr_number}/files"
+    files_url = f"https://api.github.com/repos/{repo}/pulls/{pr_number}/files"
     
     headers = {
         "Authorization": f"Bearer {github_token}",
