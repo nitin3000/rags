@@ -3,19 +3,21 @@ import hashlib
 import oracledb
 from typing import List, Dict, Any
 from langchain_core.documents import Document
-from langchain_oracledb.vectorstores import OracleVS
 from langchain_openai import OpenAIEmbeddings
+from langchain_oracledb import OracleVS
 
 # Import the modern package processing elements
 import tree_sitter_language_pack as tspack
 
 class OracleCodeIngestionPipeline:
     def __init__(self, openai_api_key: str):
+        # 1. Initialize modern OpenAI embedding configurations
         self.embeddings = OpenAIEmbeddings(
             model="text-embedding-3-small", 
             openai_api_key=openai_api_key
         )
         
+        # 2. Establish local administrative socket access profiles
         self.connection = oracledb.connect(
             user="sys",
             password="YourSecurePassword",
@@ -23,21 +25,71 @@ class OracleCodeIngestionPipeline:
             mode=oracledb.AUTH_MODE_SYSDBA
         )
         
+        # Must align to the table LangChain targets internally
+        target_table = "CODE_KNOWLEDGE_BASE"
+        
+        # ─── SAFE RESET & PRE-CREATE LOOP ────────────────────────────────────
+        print(f"[⚙️] Auditing schema footprint for table: SYS.{target_table}")
+        with self.connection.cursor() as cursor:
+            # First, safely drop old versions of the table to clean out old column structures
+            try:
+                print(f"[⚙️] Dropping legacy structural layout for SYS.{target_table}...")
+                cursor.execute(f"DROP TABLE SYS.{target_table}")
+                self.connection.commit()
+            except oracledb.DatabaseError as e:
+                error_obj, = e.args
+                if error_obj.code != 942:  # Ignore 'table does not exist' errors
+                    raise e
+
+            # Create the exact native layout expected by langchain_oracledb
+            print(f"[⚙️] Injecting universal multi-identifier layout for SYS.{target_table}...")
+            # Create the exact layout satisfying your custom script variables and langchain_oracledb
+            print(f"[⚙️] Injecting complete universal identifier layout for SYS.{target_table}...")
+            ddl_create = f"""
+            CREATE TABLE SYS.{target_table} (
+                id               VARCHAR2(64) DEFAULT LOWER(RAWTOHEX(SYS_GUID())) NOT NULL,
+                file_path        VARCHAR2(512) NOT NULL,
+                programming_lang VARCHAR2(64) NOT NULL,
+                
+                -- Custom Ingestion Script Content Fields (Covers both content variants)
+                code_chunk       CLOB,
+                code_content     CLOB,                                  -- Added to satisfy ORA-00904
+                code_embedding   VECTOR(1536, FLOAT32),
+                
+                -- LangChain OracleVS internal hardcoded fields
+                text             CLOB,
+                metadata         VARCHAR2(4000) CHECK (metadata IS JSON),
+                embedding        VECTOR(1536, FLOAT32),
+                
+                created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                CONSTRAINT pk_code_knowledge_base PRIMARY KEY (id)
+            )
+            """
+
+
+            cursor.execute(ddl_create)
+            self.connection.commit()
+            print(f"[✓] SYS.{target_table} instantiated successfully.")
+                    
+        # 3. Securely map official LangChain-OracleDB components
+        # Fixed: Removed custom column parameters. Passing standard client, table, and enum strategies.
         self.vector_store = OracleVS(
             client=self.connection,
             embedding_function=self.embeddings,
-            table_name="REPOSITORY_CONTEXT",
+            table_name=target_table,
             distance_strategy="COSINE"
         )
         
+        # 4. Enforce clean language parsing maps
         self.extension_map = {
             ".py": "python",
             ".java": "java",
             ".go": "go",
-            ".jsx": "tsx",   # Normalized to standard tree-sitter grammar names
+            ".jsx": "tsx",
             ".tsx": "tsx"
         }
 
+        
     def compute_file_hash(self, file_content: str) -> str:
         return hashlib.md5(file_content.encode('utf-8')).hexdigest()
 
