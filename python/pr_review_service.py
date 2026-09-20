@@ -158,7 +158,8 @@ def process_pr_review_workflow(repo: str, pr_number: int, github_token: str):
             model="gpt-4o",
             messages=[{"role": "user", "content": prompt}]
         )
-        review_feedback = llm_res.choices.message.content.strip()
+        review_feedback = llm_res.choices[0].message.content.strip()
+        
         
         if "LGTM" not in review_feedback:
             comments.append({
